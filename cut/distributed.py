@@ -17,7 +17,7 @@ __author__ = 'Alec Thomas <alec@swapoff.org>'
 
 from Queue import Empty
 from redis import Redis
-import json
+from cut.serialize import Serializable
 import time
 
 
@@ -27,14 +27,6 @@ class DistributedError(Exception):
 
 class LockTimeout(DistributedError):
     """Raised when lock acquisition times out."""
-
-
-class Serializable(object):
-    """Subclasses are serializable by the distributed-system API."""
-
-    def serialize(self):
-        """Serialize this object."""
-        return dumps(self)
 
 
 class _DistributedBase(object):
@@ -169,53 +161,6 @@ class Lock(_DistributedBase, Serializable):
 
     def __exit__(self, unused_exc_type, unused_exc_value, unused_traceback):
         return self.release()
-
-
-class _CustomEncoder(json.JSONEncoder):
-    """A custom JSON encoder for distributed primitives."""
-    def default(self, instance):
-        if isinstance(instance, Serializable):
-            if hasattr(instance, '__serialize__'):
-                state = instance.__serialize__()
-            else:
-                state = instance.__dict__.copy()
-                for key in state.keys():
-                    if key.startswith('_'):
-                        del state[key]
-            type = instance.__class__.__name__
-            return {'__distributed_type__': type, 'state': state}
-        return json.JSONEncoder.default(self, instance)
-
-
-def dumps(instance):
-    """Serialize POD types or distributed types for distributed use.
-
-    The format for distributed types is deliberately very simple, serializing
-    to a well-defined JSON format, to allow cross-language implementations.
-
-    The format is a dictionary with two keys:
-        __distributed_type__: Distributed type name eg. Lock
-        state: State necessary to recreate instance.
-    """
-    return json.dumps(instance, cls=_CustomEncoder)
-
-
-def _custom_decoder(pod):
-    if isinstance(pod, dict) and '__distributed_type__' in pod:
-        cls = globals()[pod['__distributed_type__']]
-        if hasattr(cls, '__deserialize__'):
-            instance = cls.__new__(cls)
-            instance.__deserialize__(pod['state'])
-        else:
-            kwargs = dict((str(k), v) for k, v in pod['state'].iteritems())
-            instance = cls(**kwargs)
-        return instance
-    return pod
-
-
-def loads(state):
-    """Deserialize data for use in a distributed system."""
-    return json.loads(state, object_hook=_custom_decoder)
 
 
 # Global Redis connections

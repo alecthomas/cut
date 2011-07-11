@@ -11,13 +11,19 @@
 __author__ = 'Alec Thomas <alec@swapoff.org>'
 
 
+import json
 import unittest
-from cut.distributed import Lock, dumps, loads
+from cut.serialize import Serializable, Serializer
 
 
-class TestDistributedSerialization(unittest.TestCase):
-    EXPECTED_JSON = '{"__distributed_type__": "Lock", "state": {"key": "test"}}'
+class MyCustomObject(
+
+
+class TestSerialization(unittest.TestCase):
+    EXPECTED_JSON = '{"__type__": "Lock", "state": {"key": "test"}}'
     EXPECTED_POD_JSON = '[1, "hello"]'
+
+    s = Serializer(json)
 
     def testdumps_distributed_primitive(self):
         lock = Lock('test')
